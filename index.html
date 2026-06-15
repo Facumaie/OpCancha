@@ -19,7 +19,7 @@
     background:var(--bg); color:var(--bone);
     font-family:"JetBrains Mono",monospace;
     overflow:hidden; user-select:none; -webkit-user-select:none;
-    display:flex; flex-direction:column;
+    display:flex; flex-direction:column; height:100dvh;
   }
   #top{
     display:flex; align-items:stretch; gap:1px; background:var(--line);
@@ -41,9 +41,9 @@
   canvas{position:absolute; inset:0; width:100%; height:100%; touch-action:none; display:block;}
 
   #log{
-    height:74px; background:var(--panel); border-top:1px solid var(--line);
-    padding:6px 10px; overflow:hidden; display:flex; flex-direction:column-reverse;
-    font-size:11px; line-height:1.5;
+    height:74px; flex:0 0 auto; background:var(--panel); border-top:1px solid var(--line);
+    padding:6px 10px; padding-bottom:calc(6px + env(safe-area-inset-bottom)); overflow:hidden;
+    display:flex; flex-direction:column-reverse; font-size:11px; line-height:1.5;
   }
   .logline{white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .logline b{color:var(--dim); font-weight:400;}
@@ -146,6 +146,7 @@
     .tval{font-size:15px;} #marcador .tval{font-size:17px;}
     #brand{display:none;} .title{font-size:34px;}
     .abil{width:52px; height:52px;} .abil .ai{font-size:17px;}
+    #log{height:118px;}
   }
 </style>
 </head>
@@ -243,7 +244,9 @@ function resize(){
   const r=document.getElementById('stage').getBoundingClientRect();
   cv.width=r.width*dpr; cv.height=r.height*dpr;
   const s=Math.min(r.width/W, r.height/H);
-  scale=s; ox=(r.width - W*s)/2; oy=(r.height - H*s)/2;
+  scale=s; ox=(r.width - W*s)/2;
+  const leftover=r.height - H*s;
+  oy = (r.width<=560) ? leftover*0.14 : leftover/2;
 }
 window.addEventListener('resize', resize);
 
