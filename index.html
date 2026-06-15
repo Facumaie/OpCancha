@@ -48,6 +48,16 @@
   .logline{white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .logline b{color:var(--dim); font-weight:400;}
   .l-info{color:var(--dim);} .l-warn{color:var(--amber);} .l-crit{color:var(--red);} .l-ok{color:var(--teal);}
+  .logline.l-crit{ color:#ff6b61; background:rgba(255,69,58,.12); border-left:3px solid var(--red);
+    padding-left:6px; border-radius:2px; animation:critflash 1.1s ease-out; }
+  @keyframes critflash{ 0%{ background:rgba(255,69,58,.55);} 100%{ background:rgba(255,69,58,.12);} }
+  #alert{ position:absolute; top:8px; left:50%; transform:translateX(-50%) translateY(-10px);
+    background:rgba(38,8,8,.94); border:1px solid var(--red); color:#ff6b61; border-radius:8px;
+    padding:8px 16px; font-family:"JetBrains Mono"; font-weight:700; font-size:12px; letter-spacing:.03em;
+    z-index:18; pointer-events:none; opacity:0; transition:opacity .25s, transform .25s;
+    max-width:92%; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #alert.show{ opacity:1; transform:translateX(-50%) translateY(0); animation:alertpulse 1s ease-in-out infinite; }
+  @keyframes alertpulse{ 0%,100%{ box-shadow:0 3px 16px rgba(255,69,58,.28);} 50%{ box-shadow:0 3px 22px rgba(255,69,58,.6);} }
 
   .overlay{
     position:absolute; inset:0; background:rgba(8,11,16,.93);
@@ -171,6 +181,8 @@
       <button class="abil" id="abDespeje"><span class="ai">✸</span><span class="al">DESPEJE</span><span class="cd"></span></button>
       <button class="abil" id="abRefuerzo"><span class="ai">＋</span><span class="al">REFUERZO</span><span class="cd"></span></button>
     </div>
+
+    <div id="alert"></div>
 
     <div id="deploybar">
       <div id="budgetBox"><div class="k">PRESUPUESTO</div><div class="v" id="budgetVal">22</div></div>
@@ -358,7 +370,7 @@ let season={fecha:1, len:5, merito:0, upg:{budget:0,speed:0,presence:0,patience:
 let debriefNext='upgrade';
 const AB={despeje:{cd:32,t:0}, refuerzo:{cd:40,t:0}};
 let targeting=null;
-const GRAB_R=28, ARRIVE_R=30;
+const GRAB_R=31, ARRIVE_R=30;
 
 function makeUnit(type){
   const t=UTYPES[type];
@@ -384,8 +396,15 @@ function log(msg,cls){
   d.className='logline '+(cls||'l-info');
   const t=fmtClock(totalElapsed());
   d.innerHTML='<b>'+t+'</b>  '+msg;
-  logEl.appendChild(d);
-  while(logEl.children.length>30) logEl.removeChild(logEl.firstChild);
+  logEl.insertBefore(d, logEl.firstChild);
+  while(logEl.children.length>30) logEl.removeChild(logEl.lastChild);
+}
+const alertEl=document.getElementById('alert'); let alertTO=null;
+function criticalAlert(msg){
+  alertEl.innerHTML='⚠ '+msg;
+  alertEl.classList.add('show');
+  if(alertTO) clearTimeout(alertTO);
+  alertTO=setTimeout(()=>alertEl.classList.remove('show'), 3500);
 }
 function totalElapsed(){ let t=phaseT; for(let i=0;i<phaseIdx;i++) t+=PHASES[i].dur; return t; }
 function fmtClock(s){ s=Math.floor(s); return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
@@ -581,6 +600,7 @@ function resolveIncident(inc,success){
     s.tension=Math.min(100, s.tension+18);
     log('✗ NO CONTENIDO: '+inc.cfg.label+' en '+s.short,'l-crit');
     snd.crit();
+    criticalAlert('NO CONTENIDO · '+inc.cfg.label+' en '+s.short);
     if(inc.type==='rinia' && Math.random()<0.5) setTimeout(()=>{ if(running) spawnIncident(s,'rinia'); },800);
   }
 }
@@ -686,33 +706,38 @@ function drawSector(s){
 }
 
 function drawIncident(inc){
-  const cfg=inc.cfg, R=21;
+  const cfg=inc.cfg, R=25;
   if(atlasReady){ drawSprite(SPRITE_IDX[inc.type], inc.x, inc.y, R*2); }
   else {
     const pulse=0.6+0.4*Math.abs(Math.sin(performance.now()/180));
     ctx.fillStyle=hexA(cfg.color,0.18*pulse+0.14); ctx.beginPath(); ctx.arc(inc.x,inc.y,R,0,7); ctx.fill();
-    ctx.fillStyle=cfg.color; ctx.font='800 18px "JetBrains Mono"'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillStyle=cfg.color; ctx.font='800 20px "JetBrains Mono"'; ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillText(cfg.sym, inc.x, inc.y+1);
   }
-  // control progress (teal) just outside
+  // control progress (teal)
   if(inc.control>0){
     ctx.beginPath(); ctx.arc(inc.x,inc.y,R+3,-Math.PI/2,-Math.PI/2+Math.PI*2*inc.control);
-    ctx.strokeStyle='#2ec4b6'; ctx.lineWidth=2.8; ctx.stroke();
+    ctx.strokeStyle='#2ec4b6'; ctx.lineWidth=3; ctx.stroke();
   }
-  // patience remaining (color) outer
+  // patience remaining (color)
   const pr=inc.patience/cfg.patience;
-  ctx.beginPath(); ctx.arc(inc.x,inc.y,R+6,-Math.PI/2,-Math.PI/2+Math.PI*2*pr);
-  ctx.strokeStyle=cfg.color; ctx.lineWidth=3; ctx.stroke();
+  ctx.beginPath(); ctx.arc(inc.x,inc.y,R+7,-Math.PI/2,-Math.PI/2+Math.PI*2*pr);
+  ctx.strokeStyle=cfg.color; ctx.lineWidth=3.2; ctx.stroke();
   // required-force badge
-  ctx.fillStyle='#0b0f15'; ctx.beginPath(); ctx.arc(inc.x+R-1,inc.y-R+1,8,0,7); ctx.fill();
-  ctx.strokeStyle=cfg.color; ctx.lineWidth=1.4; ctx.stroke();
-  ctx.fillStyle=cfg.color; ctx.font='700 11px "JetBrains Mono"'; ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText(cfg.req+'', inc.x+R-1, inc.y-R+2);
-  // label below
+  ctx.fillStyle='#0b0f15'; ctx.beginPath(); ctx.arc(inc.x+R-2,inc.y-R+2,9.5,0,7); ctx.fill();
+  ctx.strokeStyle=cfg.color; ctx.lineWidth=1.6; ctx.stroke();
+  ctx.fillStyle=cfg.color; ctx.font='700 13px "JetBrains Mono"'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(cfg.req+'', inc.x+R-2, inc.y-R+3);
+  // label on a solid pill (always legible, even over textures / under units)
   const lab=INC_LABEL[inc.type];
-  ctx.font='700 9px "JetBrains Mono"'; ctx.textAlign='center'; ctx.textBaseline='top';
-  ctx.fillStyle='rgba(8,11,16,.8)'; ctx.fillText(lab, inc.x+0.7, inc.y+R+8.7);
-  ctx.fillStyle=cfg.color; ctx.fillText(lab, inc.x, inc.y+R+8);
+  ctx.font='700 11px "JetBrains Mono"';
+  const tw=ctx.measureText(lab).width;
+  const ly = (inc.y < H*0.6) ? (inc.y + R + 6) : (inc.y - R - 18);
+  ctx.fillStyle='rgba(8,11,16,.85)';
+  roundRect(inc.x - tw/2 - 6, ly - 2, tw + 12, 16, 5); ctx.fill();
+  ctx.strokeStyle=hexA(cfg.color,.6); ctx.lineWidth=1; ctx.stroke();
+  ctx.fillStyle=cfg.color; ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText(lab, inc.x, ly);
 }
 
 function chip(col,r){
@@ -753,7 +778,7 @@ function spriteChoque(col){
 }
 
 function drawUnit(u,lift){
-  const col=u.t.col, D=(u.type==='choque'?40:34), rr=D/2+2;
+  const col=u.t.col, D=(u.type==='choque'?44:38), rr=D/2+2;
   const cx=u.x, cy=u.y+(lift?-3:0);
   ctx.save();
   if(u.role==='station'){ ctx.beginPath(); ctx.arc(cx,cy,rr,0,7); ctx.strokeStyle=hexA('#f5a623',.9); ctx.lineWidth=2.6; ctx.stroke(); }
@@ -773,10 +798,10 @@ function drawUnit(u,lift){
   }
   // type tag badge (corner)
   ctx.shadowBlur=0;
-  const bx=cx+D*0.30, by=cy+D*0.30;
-  ctx.fillStyle='#0b0f15'; ctx.beginPath(); ctx.arc(bx,by,6.6,0,7); ctx.fill();
-  ctx.strokeStyle=col; ctx.lineWidth=1.4; ctx.stroke();
-  ctx.fillStyle=col; ctx.font='700 9px "JetBrains Mono"'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  const bx=cx+D*0.32, by=cy+D*0.32;
+  ctx.fillStyle='#0b0f15'; ctx.beginPath(); ctx.arc(bx,by,8,0,7); ctx.fill();
+  ctx.strokeStyle=col; ctx.lineWidth=1.6; ctx.stroke();
+  ctx.fillStyle=col; ctx.font='700 11px "JetBrains Mono"'; ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillText(UTAG[u.type], bx, by+0.5);
   ctx.restore();
 }
@@ -856,7 +881,7 @@ function onUp(e){
   if(!drag) return;
   const p=toWorld(e.clientX,e.clientY);
   // drop on incident?
-  let inc=null,bd=34;
+  let inc=null,bd=40;
   for(const i of incidents){ const d=Math.hypot(i.x-p.x,i.y-p.y); if(d<bd){bd=d;inc=i;} }
   if(inc){ drag.role='respond'; drag.target=inc; drag.arrived=false; }
   else {
@@ -906,6 +931,7 @@ function enterDeploy(){
   document.getElementById('debrief').style.display='none';
   deploybar.classList.add('on');
   logEl.innerHTML='';
+  if(alertTO) clearTimeout(alertTO); alertEl.classList.remove('show');
   log('FECHA '+season.fecha+'/'+season.len+' · Briefing de despliegue. El reloj no corre: tomate tu tiempo y arrastrá cada efectivo a su sector antes de abrir los accesos.','l-info');
   const h=document.getElementById('hint');
   h.style.opacity='0';
