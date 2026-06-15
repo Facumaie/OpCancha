@@ -27,7 +27,7 @@
   }
   .tbox{background:var(--panel); padding:7px 12px; display:flex; flex-direction:column; justify-content:center;}
   .tlabel{font-size:9px; letter-spacing:.18em; color:var(--dim); text-transform:uppercase;}
-  .tval{font-family:"Big Shoulders Display"; font-weight:800; font-size:20px; line-height:1; letter-spacing:.02em;}
+  .tval{font-family:"Big Shoulders Display"; font-weight:800; font-size:20px; line-height:1; letter-spacing:.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   #brand{flex:0 0 auto;}
   #brand .tval{color:var(--amber);}
   #phaseBox{flex:1 1 auto;}
@@ -121,6 +121,19 @@
     .buy{min-width:0; flex:1 1 30%;} .buy .bs{display:none;}
     #openBtn{width:100%; margin:4px 0 0;}
   }
+  #abilities{position:absolute; left:8px; bottom:8px; display:none; gap:8px; z-index:11;}
+  #abilities.on{display:flex;}
+  .abil{position:relative; width:58px; height:58px; border-radius:12px; border:1px solid var(--line);
+    background:var(--panel); color:var(--bone); cursor:pointer; overflow:hidden;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+    font-family:"JetBrains Mono"; touch-action:manipulation;}
+  .abil:disabled{cursor:not-allowed;}
+  .abil .ai{font-size:19px; line-height:1; color:var(--amber);}
+  .abil .al{font-size:8px; letter-spacing:.04em; color:var(--dim);}
+  .abil.arming{border-color:var(--amber); box-shadow:0 0 0 2px var(--amber) inset;}
+  .abil .cd{position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+    background:conic-gradient(rgba(8,11,16,.62) var(--cd,0deg), transparent 0deg);
+    display:flex; align-items:center; justify-content:center; font-weight:700; font-size:17px; color:var(--bone);}
   #hint{
     position:absolute; left:50%; bottom:10px; transform:translateX(-50%);
     background:rgba(20,26,38,.9); border:1px solid var(--line); border-radius:20px;
@@ -128,8 +141,11 @@
     transition:opacity .4s; white-space:nowrap;
   }
   @media (max-width:560px){
-    .tval{font-size:16px;} #marcador .tval{font-size:18px;}
+    .tbox{padding:6px 7px;}
+    .tlabel{font-size:8px; letter-spacing:.08em;}
+    .tval{font-size:15px;} #marcador .tval{font-size:17px;}
     #brand{display:none;} .title{font-size:34px;}
+    .abil{width:52px; height:52px;} .abil .ai{font-size:17px;}
   }
 </style>
 </head>
@@ -149,6 +165,11 @@
   <div id="stage">
     <canvas id="cv"></canvas>
     <div id="hint">Arrastrá efectivos al sector para apostarlos · soltalos sobre un incidente para despacharlos</div>
+
+    <div id="abilities">
+      <button class="abil" id="abDespeje"><span class="ai">✸</span><span class="al">DESPEJE</span><span class="cd"></span></button>
+      <button class="abil" id="abRefuerzo"><span class="ai">＋</span><span class="al">REFUERZO</span><span class="cd"></span></button>
+    </div>
 
     <div id="deploybar">
       <div id="budgetBox"><div class="k">PRESUPUESTO</div><div class="v" id="budgetVal">22</div></div>
@@ -332,6 +353,8 @@ let score={resolved:0, failed:0, peak:0, ctrlSum:0, ctrlN:0};
 let marcador={local:0, visita:0};
 let season={fecha:1, len:5, merito:0, upg:{budget:0,speed:0,presence:0,patience:0,force:0}};
 let debriefNext='upgrade';
+const AB={despeje:{cd:32,t:0}, refuerzo:{cd:40,t:0}};
+let targeting=null;
 const GRAB_R=28, ARRIVE_R=30;
 
 function makeUnit(type){
@@ -348,6 +371,7 @@ function reset(){
   score={resolved:0,failed:0,peak:0,ctrlSum:0,ctrlN:0};
   marcador={local:0,visita:0};
   for(const s of SECTORS){ s.occ=0; s.tension=8; s._crit=false; }
+  AB.despeje.t=0; AB.refuerzo.t=0; targeting=null;
 }
 
 // ---------- Logging ----------
@@ -365,7 +389,8 @@ function fmtClock(s){ s=Math.floor(s); return String(Math.floor(s/60)).padStart(
 
 // ---------- Incidents ----------
 function spawnIncident(forceSector,forceType){
-  if(incidents.length>=6) return;
+  const cap=3+Math.floor((season.fecha-1)/2); // 3 en F1 ... 5 en F5
+  if(incidents.length>=cap) return;
   let s = forceSector || weightedSector();
   if(!s) return;
   let type = forceType;
@@ -392,7 +417,8 @@ function weightedSector(){
 
 // ---------- Update ----------
 function update(dt){
-  const DIFF=1+(season.fecha-1)*0.16, PMUL=1+season.upg.presence*0.18, SMUL=1+season.upg.speed*0.10;
+  const DIFF=1+(season.fecha-1)*0.13, PMUL=1+season.upg.presence*0.18, SMUL=1+season.upg.speed*0.10;
+  AB.despeje.t=Math.max(0,AB.despeje.t-dt); AB.refuerzo.t=Math.max(0,AB.refuerzo.t-dt);
   // phase clock
   phaseT+=dt;
   const ph=PHASES[phaseIdx];
@@ -432,7 +458,7 @@ function update(dt){
     if(phase.drain) rise += s.iso?2.0:1.0;
     if(phase.churn) rise += 0.4;
     // incidents in this sector add heat
-    for(const inc of incidents) if(inc.sector===s.id) rise+=1.6;
+    for(const inc of incidents) if(inc.sector===s.id) rise+=1.1;
     rise *= DIFF;
     const decay = (pres*2.4 + 0.6) * PMUL;
     s.tension += (rise-decay)*dt;
@@ -458,8 +484,8 @@ function update(dt){
   spawnCD-=dt;
   if(spawnCD<=0){
     const heat=SECTORS.reduce((a,s)=>a+s.tension,0)/SECTORS.length;
-    spawnCD = Math.max(1.6, 6.5 - heat/14) * (phase.fill?1.2:1) * (phase.drain?0.7:1) / DIFF;
-    if(Math.random()<0.85) spawnIncident();
+    spawnCD = Math.max(2.6, 7.5 - heat/22) * (phase.fill?1.15:1) * (phase.drain?0.8:1) / (1+(season.fecha-1)*0.09);
+    if(Math.random()<0.8) spawnIncident();
   }
 
   // incident resolution
@@ -495,6 +521,13 @@ function update(dt){
       const step=Math.min(d, u.t.speed*SMUL*dt);
       u.x+=dx/d*step; u.y+=dy/d*step;
     }
+  }
+
+  // temporary reinforcements expire
+  for(const u of units) if(u.temp) u.life-=dt;
+  if(units.some(u=>u.temp&&u.life<=0)){
+    if(drag&&drag.temp&&drag.life<=0) drag=null;
+    units=units.filter(u=>!(u.temp&&u.life<=0));
   }
 
   // crowd particles
@@ -725,6 +758,7 @@ function drawUnit(u,lift){
     const p=0.7+0.3*Math.abs(Math.sin(performance.now()/200));
     ctx.beginPath(); ctx.arc(cx,cy,rr,0,7); ctx.strokeStyle=hexA('#ff453a',p); ctx.lineWidth=2.8; ctx.stroke();
   }
+  if(u.temp){ ctx.save(); ctx.setLineDash([4,3]); ctx.beginPath(); ctx.arc(cx,cy,rr+2,0,7); ctx.strokeStyle=hexA('#f5a623',.85); ctx.lineWidth=1.6; ctx.stroke(); ctx.restore(); }
   if(lift){ ctx.shadowColor='rgba(0,0,0,.5)'; ctx.shadowBlur=10; }
   if(atlasReady){ drawSprite(SPRITE_IDX[u.type], cx, cy, D); }
   else {
@@ -779,6 +813,11 @@ function updateHUD(){
   const c=Math.round(currentControl());
   const cv2=document.getElementById('ctrlVal'); cv2.textContent=c+'%';
   cv2.style.color = c>65?'var(--teal)': c>40?'var(--amber)':'var(--red)';
+  // abilities
+  abilEls.bar.classList.toggle('on', mode==='run');
+  updAbil(abilEls.despeje, AB.despeje);
+  updAbil(abilEls.refuerzo, AB.refuerzo);
+  abilEls.despeje.classList.toggle('arming', targeting==='despeje');
 }
 
 // ---------- Input ----------
@@ -791,6 +830,12 @@ function onDown(e){
   if(mode!=='deploy' && mode!=='run') return;
   audio();
   const p=toWorld(e.clientX,e.clientY);
+  if(targeting==='despeje'){
+    let hit=null;
+    for(const s of SECTORS){ if(inRect(p,{x:s.rect.x-8,y:s.rect.y-8,w:s.rect.w+16,h:s.rect.h+16})){ hit=s; break; } }
+    if(hit) applyDespeje(hit);
+    targeting=null; return;
+  }
   const u=pickUnit(p);
   if(u){
     // detach from current role
@@ -838,6 +883,7 @@ function loop(ts){
 
 // ---------- Game flow ----------
 const deploybar=document.getElementById('deploybar');
+const abilEls={bar:document.getElementById('abilities'), despeje:document.getElementById('abDespeje'), refuerzo:document.getElementById('abRefuerzo')};
 
 function refreshDeployHUD(){
   document.getElementById('budgetVal').textContent=budget;
@@ -966,6 +1012,31 @@ document.getElementById('openBtn').addEventListener('click', openGates);
 for(const el of document.querySelectorAll('.buy')){
   el.addEventListener('click', ()=>buyUnit(el.dataset.type));
 }
+
+// ---------- Active abilities ----------
+function useDespeje(){ if(mode!=='run' || AB.despeje.t>0) return; targeting=(targeting==='despeje')?null:'despeje'; }
+function applyDespeje(s){
+  s.tension=Math.max(0, s.tension-50);
+  let cleared=0;
+  for(const inc of incidents) if(inc.alive && inc.sector===s.id){ resolveIncident(inc,true); cleared++; }
+  AB.despeje.t=AB.despeje.cd; snd.ok();
+  log('✸ Despeje en '+s.short+' · tensión -50'+(cleared?(' · '+cleared+' contenido(s)'):''),'l-ok');
+}
+function useRefuerzo(){
+  if(mode!=='run' || AB.refuerzo.t>0) return;
+  for(let i=0;i<3;i++){ const u=makeUnit('infanteria'); u.temp=true; u.life=22; units.push(u); }
+  AB.refuerzo.t=AB.refuerzo.cd; snd.ok();
+  log('＋ Refuerzo: 3 efectivos temporales por 22s','l-info');
+}
+function updAbil(btn, ab){
+  const ready = ab.t<=0 && mode==='run';
+  btn.disabled = !ready;
+  const frac = ab.cd>0 ? Math.max(0,ab.t/ab.cd) : 0;
+  btn.style.setProperty('--cd', (frac*360)+'deg');
+  btn.querySelector('.cd').textContent = ab.t>0 ? Math.ceil(ab.t) : '';
+}
+abilEls.despeje.addEventListener('click', useDespeje);
+abilEls.refuerzo.addEventListener('click', useRefuerzo);
 
 resize(); reset(); requestAnimationFrame(loop);
 })();
