@@ -43,9 +43,9 @@
   #log{
     height:74px; flex:0 0 auto; background:var(--panel); border-top:1px solid var(--line);
     padding:6px 10px; padding-bottom:calc(6px + env(safe-area-inset-bottom)); overflow:hidden;
-    display:flex; flex-direction:column-reverse; font-size:11px; line-height:1.5;
+    display:flex; flex-direction:column; justify-content:flex-end; font-size:11px; line-height:1.5;
   }
-  .logline{white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .logline{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:0 0 auto;}
   .logline b{color:var(--dim); font-weight:400;}
   .l-info{color:var(--dim);} .l-warn{color:var(--amber);} .l-crit{color:var(--red);} .l-ok{color:var(--teal);}
   .logline.l-crit{ color:#ff6b61; background:rgba(255,69,58,.12); border-left:3px solid var(--red);
@@ -370,7 +370,7 @@ let season={fecha:1, len:5, merito:0, upg:{budget:0,speed:0,presence:0,patience:
 let debriefNext='upgrade';
 const AB={despeje:{cd:32,t:0}, refuerzo:{cd:40,t:0}};
 let targeting=null;
-const GRAB_R=31, ARRIVE_R=30;
+const GRAB_R=33, ARRIVE_R=30;
 
 function makeUnit(type){
   const t=UTYPES[type];
@@ -396,8 +396,8 @@ function log(msg,cls){
   d.className='logline '+(cls||'l-info');
   const t=fmtClock(totalElapsed());
   d.innerHTML='<b>'+t+'</b>  '+msg;
-  logEl.insertBefore(d, logEl.firstChild);
-  while(logEl.children.length>30) logEl.removeChild(logEl.lastChild);
+  logEl.appendChild(d);
+  while(logEl.children.length>40) logEl.removeChild(logEl.firstChild);
 }
 const alertEl=document.getElementById('alert'); let alertTO=null;
 function criticalAlert(msg){
@@ -706,7 +706,7 @@ function drawSector(s){
 }
 
 function drawIncident(inc){
-  const cfg=inc.cfg, R=25;
+  const cfg=inc.cfg, R=28;
   if(atlasReady){ drawSprite(SPRITE_IDX[inc.type], inc.x, inc.y, R*2); }
   else {
     const pulse=0.6+0.4*Math.abs(Math.sin(performance.now()/180));
@@ -778,7 +778,7 @@ function spriteChoque(col){
 }
 
 function drawUnit(u,lift){
-  const col=u.t.col, D=(u.type==='choque'?44:38), rr=D/2+2;
+  const col=u.t.col, D=(u.type==='choque'?48:42), rr=D/2+2;
   const cx=u.x, cy=u.y+(lift?-3:0);
   ctx.save();
   if(u.role==='station'){ ctx.beginPath(); ctx.arc(cx,cy,rr,0,7); ctx.strokeStyle=hexA('#f5a623',.9); ctx.lineWidth=2.6; ctx.stroke(); }
@@ -881,7 +881,7 @@ function onUp(e){
   if(!drag) return;
   const p=toWorld(e.clientX,e.clientY);
   // drop on incident?
-  let inc=null,bd=40;
+  let inc=null,bd=44;
   for(const i of incidents){ const d=Math.hypot(i.x-p.x,i.y-p.y); if(d<bd){bd=d;inc=i;} }
   if(inc){ drag.role='respond'; drag.target=inc; drag.arrived=false; }
   else {
